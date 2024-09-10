@@ -80,7 +80,11 @@ VAR_INPUT
 END_VAR
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[ReadStatus(Axis := Axis);
+        <ST><![CDATA[
+// Automatically check for errors on the NC axis, then reset them
+// Use with caution, this could cause damage to a physical system if implemented without care
+
+ReadStatus(Axis := Axis);
 Restart(Axis := Axis);
 ErrorCountTrigger(CLK := Error);
 
@@ -103,7 +107,10 @@ VAR_INPUT
 END_VAR
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[ReadStatus(Axis := Axis);
+        <ST><![CDATA[
+// Check for errors on the NC axis
+
+ReadStatus(Axis := Axis);
 ErrorCountTrigger(CLK := Error);
 
 IF ErrorCountTrigger.Q THEN
@@ -4214,7 +4221,10 @@ END_VAR
 VAR_INPUT
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[StopWeak(Axis := Axis);
+        <ST><![CDATA[
+// Halts the axis, NOT locking the axis from further commands during its process
+
+StopWeak(Axis := Axis);
 
 StopWeak.Execute			:= TRUE;
 
@@ -4236,7 +4246,10 @@ VAR_INPUT
 END_VAR
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[MoveVel1(Axis := Axis);
+        <ST><![CDATA[
+// Move at a given speed in a defined direction until a stop command is activated
+
+MoveVel1(Axis := Axis);
 
 MoveVel1.Velocity 			:= Velocity;
 MoveVel1.Direction			:= Direction;
@@ -4260,7 +4273,10 @@ VAR_INPUT
 END_VAR
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[MoveAbs1(Axis := Axis);
+        <ST><![CDATA[
+// Move to a specific location at a given speed
+
+MoveAbs1(Axis := Axis);
 
 MoveAbs1.Position			:= Position;
 MoveAbs1.Velocity 			:= Velocity;
@@ -4282,7 +4298,10 @@ VAR_INPUT
 END_VAR
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Enable(Axis := Axis);
+        <ST><![CDATA[
+// Disable the axis
+
+Enable(Axis := Axis);
 
 Enable.Enable 				:= FALSE;
 Enable.Enable_Negative 		:= FALSE;
@@ -4300,7 +4319,10 @@ VAR_INPUT
 END_VAR
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Enable(Axis := Axis);
+        <ST><![CDATA[
+// Enable the axis
+
+Enable(Axis := Axis);
 
 Enable.Enable 				:= TRUE;
 Enable.Enable_Negative 		:= TRUE;
@@ -4318,7 +4340,10 @@ VAR_INPUT
 END_VAR
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Restart(Axis := Axis);
+        <ST><![CDATA[
+// Reset errors on the NC axis
+
+Restart(Axis := Axis);
 
 Restart.Execute 			:= TRUE;
 
@@ -4339,7 +4364,10 @@ VAR_INPUT
 END_VAR
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[MoveAbs1(Axis := Axis);
+        <ST><![CDATA[
+// Move to Position1, then to Position2, at a set speed with a delay between the movements
+
+MoveAbs1(Axis := Axis);
 MoveAbs2(Axis := Axis);
 DelayTimer(PT := DelayBetweenMoves);
 
@@ -4397,7 +4425,10 @@ VAR_INPUT
 END_VAR
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[StopStrong(Axis := Axis);
+        <ST><![CDATA[
+// Halts the axis, locking the axis from further commands during its process
+
+StopStrong(Axis := Axis);
 
 StopStrong.Execute			:= TRUE;
 
@@ -4412,6 +4443,10 @@ END_IF]]></ST>
       </Implementation>
     </Method>
     <LineIds Name="AxisControl.AutoErrorCheckAndReset">
+      <LineId Id="97" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="96" Count="0" />
       <LineId Id="48" Count="1" />
       <LineId Id="78" Count="3" />
       <LineId Id="76" Count="0" />
@@ -4421,6 +4456,8 @@ END_IF]]></ST>
       <LineId Id="87" Count="0" />
     </LineIds>
     <LineIds Name="AxisControl.CheckForErrors">
+      <LineId Id="37" Count="0" />
+      <LineId Id="35" Count="1" />
       <LineId Id="17" Count="0" />
       <LineId Id="23" Count="0" />
       <LineId Id="25" Count="0" />
@@ -4430,6 +4467,8 @@ END_IF]]></ST>
       <LineId Id="28" Count="0" />
     </LineIds>
     <LineIds Name="AxisControl.Halt">
+      <LineId Id="21" Count="0" />
+      <LineId Id="19" Count="1" />
       <LineId Id="5" Count="0" />
       <LineId Id="7" Count="0" />
       <LineId Id="6" Count="0" />
@@ -4443,11 +4482,15 @@ END_IF]]></ST>
       <LineId Id="15" Count="1" />
     </LineIds>
     <LineIds Name="AxisControl.MoveAtVelocity">
+      <LineId Id="70" Count="0" />
+      <LineId Id="68" Count="1" />
       <LineId Id="49" Count="10" />
       <LineId Id="61" Count="1" />
       <LineId Id="60" Count="0" />
     </LineIds>
     <LineIds Name="AxisControl.MoveToPosition">
+      <LineId Id="87" Count="0" />
+      <LineId Id="85" Count="1" />
       <LineId Id="59" Count="4" />
       <LineId Id="70" Count="0" />
       <LineId Id="75" Count="0" />
@@ -4459,6 +4502,8 @@ END_IF]]></ST>
       <LineId Id="72" Count="0" />
     </LineIds>
     <LineIds Name="AxisControl.PowerOff">
+      <LineId Id="33" Count="0" />
+      <LineId Id="31" Count="1" />
       <LineId Id="16" Count="0" />
       <LineId Id="27" Count="0" />
       <LineId Id="17" Count="3" />
@@ -4467,6 +4512,7 @@ END_IF]]></ST>
       <LineId Id="12" Count="0" />
     </LineIds>
     <LineIds Name="AxisControl.PowerOn">
+      <LineId Id="28" Count="2" />
       <LineId Id="16" Count="0" />
       <LineId Id="24" Count="0" />
       <LineId Id="17" Count="3" />
@@ -4475,6 +4521,8 @@ END_IF]]></ST>
       <LineId Id="12" Count="0" />
     </LineIds>
     <LineIds Name="AxisControl.Reset">
+      <LineId Id="20" Count="0" />
+      <LineId Id="18" Count="1" />
       <LineId Id="5" Count="0" />
       <LineId Id="11" Count="0" />
       <LineId Id="7" Count="0" />
@@ -4485,6 +4533,8 @@ END_IF]]></ST>
       <LineId Id="6" Count="0" />
     </LineIds>
     <LineIds Name="AxisControl.ReversingSequence">
+      <LineId Id="117" Count="0" />
+      <LineId Id="115" Count="1" />
       <LineId Id="23" Count="0" />
       <LineId Id="41" Count="0" />
       <LineId Id="93" Count="0" />
@@ -4512,6 +4562,7 @@ END_IF]]></ST>
       <LineId Id="31" Count="0" />
     </LineIds>
     <LineIds Name="AxisControl.Stop">
+      <LineId Id="23" Count="2" />
       <LineId Id="5" Count="0" />
       <LineId Id="7" Count="0" />
       <LineId Id="6" Count="0" />
