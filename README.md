@@ -9,7 +9,6 @@
 
 + Minimum requirements (as tested) 
 	* Visual Studio 2019
-    * ------- OR -------
     * TwinCAT XAE Shell 3.1.4024.56
 
 ## How do I use this? ##
