@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="MAIN" Id="{bdf002b2-15de-401c-9ee1-0af059a6100a}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	Axis		: AxisControl;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Axis.CyclicUpdate();
+Axis.PowerOn();
+Axis.AutoErrorCheckAndReset();
+Axis.ReversingSequence(Position1 := 0, Position2 := 500, Velocity := 2000, DelayBetweenMoves := T#500ms);]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="2" Count="0" />
+      <LineId Id="7" Count="2" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
