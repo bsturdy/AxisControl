@@ -2,48 +2,38 @@
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
   <POU Name="AxisControl" Id="{0762ff6d-63f2-4251-b923-cf396e8d588b}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK AxisControl
-VAR_INPUT
-END_VAR
-VAR_OUTPUT
-END_VAR
 VAR
 	
-	Axis				: AXIS_REF;		
+	// Axis Reference
+	_Axis				: AXIS_REF;		
+	
+	// Internal Variables
+	_LocalState			: BYTE;
+	_ErrorIDPrevious	: UDINT;
+	_ErrorCount			: UINT;
+	_BusyMoving			: BOOL;
+	_BusyStopping		: BOOL;
 
-	BusyMoving			: BOOL;
-	BusyStopping		: BOOL;
-	Error				: BOOL;
-	ErrorID				: UDINT;
-	ErrorIDPrevious		: UDINT;
-	ErrorStop			: BOOL;
-	LocalState			: BYTE;
-	Disabled			: BOOL;
-	Stopping			: BOOL;
-	StandStill			: BOOL;
-	DiscreteMotion		: BOOL;
-	ContinuousMotion	: BOOL;
-	SynchronizedMotion	: BOOL;
-	Homing				: BOOL;
-	ConstantVelocity	: BOOL;
-	Accelerating		: BOOL;
-	Decelerating		: BOOL;
-	Status				: ST_AxisStatus;
-	ErrorCount			: UINT;
+	// Internal Functions
+	_ErrorCountTrigger	: R_TRIG;
+	_DelayTimer			: TON;	
 	
-	ErrorCountTrigger	: R_TRIG;
-	DelayTimer			: TON;
+	// Axis States
+	_States				: AxisStates;
 	
-	Enable				: MC_Power;
-	Restart				: MC_Reset;
-	ReadStatus			: MC_ReadStatus;	
-	MoveAbs1			: MC_MoveAbsolute;
-	MoveAbs2			: MC_MoveAbsolute;
-	MoveRel1			: MC_MoveRelative;
-	MoveRel2			: MC_MoveRelative;
-	MoveVel1			: MC_MoveVelocity;
-	MoveVel2			: MC_MoveVelocity;
-	StopWeak			: MC_Halt;
-	StopStrong			: MC_Stop;
+	// Motion Functions Blocks
+	_Enable				: MC_Power;
+	_Reset				: MC_Reset;
+	_ReadStatus			: MC_ReadStatus;
+	_WriteParameter		: MC_WriteParameter;	
+	_MoveAbs1			: MC_MoveAbsolute;
+	_MoveAbs2			: MC_MoveAbsolute;
+	_MoveRel1			: MC_MoveRelative;
+	_MoveRel2			: MC_MoveRelative;
+	_MoveVel1			: MC_MoveVelocity;
+	_MoveVel2			: MC_MoveVelocity;
+	_StopWeak			: MC_Halt;
+	_StopStrong			: MC_Stop;
 		
 END_VAR
 ]]></Declaration>
@@ -68,13 +58,16 @@ END_VAR
         </XmlArchive>
       </NWL>
     </Implementation>
-    <Folder Name="Movements" Id="{6fc24c7c-89c4-4f59-a059-62fbfee907d6}">
-      <Folder Name="Brake" Id="{531eff0b-604f-4c37-ace9-2958971ea826}" />
-      <Folder Name="Position" Id="{8d7c9616-e265-4389-960e-a02f0ff11726}" />
-      <Folder Name="Velocity" Id="{bd356ce1-0682-451a-8f8f-f2d75631abf0}" />
+    <Folder Name="Methods" Id="{84cb375e-4310-4c8e-b285-59f1b782ddd6}">
+      <Folder Name="Movements" Id="{6fc24c7c-89c4-4f59-a059-62fbfee907d6}">
+        <Folder Name="Brake" Id="{531eff0b-604f-4c37-ace9-2958971ea826}" />
+        <Folder Name="Position" Id="{8d7c9616-e265-4389-960e-a02f0ff11726}" />
+        <Folder Name="Velocity" Id="{bd356ce1-0682-451a-8f8f-f2d75631abf0}" />
+      </Folder>
+      <Folder Name="Power and Monitoring" Id="{dada0367-7150-48df-9b09-3250334c5191}" />
     </Folder>
-    <Folder Name="Power and Monitoring" Id="{dada0367-7150-48df-9b09-3250334c5191}" />
-    <Method Name="AutoErrorCheckAndReset" Id="{c4558794-dce0-4723-8ae5-ffe53ab7450c}" FolderPath="Power and Monitoring\">
+    <Folder Name="Properties" Id="{391590a4-d10f-4e23-95ce-50d1b79d7756}" />
+    <Method Name="AutoErrorCheckAndReset" Id="{c4558794-dce0-4723-8ae5-ffe53ab7450c}" FolderPath="Methods\Power and Monitoring\">
       <Declaration><![CDATA[METHOD AutoErrorCheckAndReset : BOOL
 VAR_INPUT
 END_VAR
@@ -84,24 +77,43 @@ END_VAR
 // Automatically check for errors on the NC axis, then reset them
 // Use with caution, this could cause damage to a physical system if implemented without care
 
-ReadStatus(Axis := Axis);
-Restart(Axis := Axis);
-ErrorCountTrigger(CLK := Error);
+_ReadStatus(Axis := _Axis);
+_Reset(Axis := _Axis);
+_ErrorCountTrigger(CLK := _States._Error);
 
-IF ErrorCountTrigger.Q THEN
-	ErrorCount := ErrorCount + 1;
+IF _ErrorCountTrigger.Q THEN
+	_ErrorCount := _ErrorCount + 1;
 END_IF
 
-IF Error THEN
-	Restart.Execute := TRUE;
-	IF Restart.Done THEN
-		Restart.Execute := FALSE;
+IF _States._Error THEN
+	_Reset.Execute := TRUE;
+	IF _Reset.Done THEN
+		_Reset.Execute := FALSE;
 		AutoErrorCheckAndReset := TRUE;
 	END_IF
 END_IF]]></ST>
       </Implementation>
     </Method>
-    <Method Name="CheckForErrors" Id="{1156e6bc-6693-4a8a-8e9b-2040f7a304f7}" FolderPath="Power and Monitoring\">
+    <Property Name="AxisStates" Id="{743488a2-70c8-43fc-bb97-edf6af21b812}" FolderPath="Properties\">
+      <Declaration><![CDATA[PROPERTY AxisStates : AxisStates]]></Declaration>
+      <Get Name="Get" Id="{c75450e0-e73c-4f6d-987f-cb307a38ed66}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[AxisStates := _States;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{10fca8b1-77ef-4bc2-af4d-2836594ff324}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="CheckForErrors" Id="{1156e6bc-6693-4a8a-8e9b-2040f7a304f7}" FolderPath="Methods\Power and Monitoring\">
       <Declaration><![CDATA[METHOD CheckForErrors : BOOL
 VAR_INPUT	
 END_VAR
@@ -110,19 +122,19 @@ END_VAR
         <ST><![CDATA[
 // Check for errors on the NC axis
 
-ReadStatus(Axis := Axis);
-ErrorCountTrigger(CLK := Error);
+_ReadStatus(Axis := _Axis);
+_ErrorCountTrigger(CLK := _States._Error);
 
-IF ErrorCountTrigger.Q THEN
-	ErrorCount := ErrorCount + 1;
+IF _ErrorCountTrigger.Q THEN
+	_ErrorCount := _ErrorCount + 1;
 END_IF
 
-IF Error THEN
+IF _States._Error THEN
 	CheckForErrors := TRUE;
 END_IF]]></ST>
       </Implementation>
     </Method>
-    <Method Name="CyclicUpdate" Id="{9c870678-befe-45fd-8165-efe8f4452763}" FolderPath="Power and Monitoring\">
+    <Method Name="CyclicUpdate" Id="{9c870678-befe-45fd-8165-efe8f4452763}" FolderPath="Methods\Power and Monitoring\">
       <Declaration><![CDATA[METHOD CyclicUpdate : BOOL
 VAR_INPUT	
 END_VAR
@@ -161,7 +173,7 @@ END_VAR
                       <o>
                         <v n="BoxType">"MC_Power"</v>
                         <o n="Instance" t="Operand">
-                          <v n="Operand">"Enable"</v>
+                          <v n="Operand">"_Enable"</v>
                           <v n="Type">"MC_Power"</v>
                           <v n="Comment">""</v>
                           <v n="SymbolComment">""</v>
@@ -254,7 +266,7 @@ END_VAR
                         <l2 n="InputItems" cet="BoxTreeOperand">
                           <o>
                             <o n="Operand" t="Operand">
-                              <v n="Operand">"Axis"</v>
+                              <v n="Operand">"_Axis"</v>
                               <v n="Type">"AXIS_REF"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -389,7 +401,7 @@ END_VAR
                         <o n="InputParam" t="ParamList">
                           <l2 n="Names" cet="String">
                             <v>Axis</v>
-                            <v>Enable</v>
+                            <v>_Enable</v>
                             <v>Enable_Positive</v>
                             <v>Enable_Negative</v>
                             <v>Override</v>
@@ -447,7 +459,7 @@ END_VAR
                       <o>
                         <v n="BoxType">"MC_Reset"</v>
                         <o n="Instance" t="Operand">
-                          <v n="Operand">"Restart"</v>
+                          <v n="Operand">"_Reset"</v>
                           <v n="Type">"MC_Reset"</v>
                           <v n="Comment">""</v>
                           <v n="SymbolComment">""</v>
@@ -524,7 +536,7 @@ END_VAR
                         <l2 n="InputItems" cet="BoxTreeOperand">
                           <o>
                             <o n="Operand" t="Operand">
-                              <v n="Operand">"Axis"</v>
+                              <v n="Operand">"_Axis"</v>
                               <v n="Type">"AXIS_REF"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -610,7 +622,7 @@ END_VAR
                       <o>
                         <v n="BoxType">"MC_ReadStatus"</v>
                         <o n="Instance" t="Operand">
-                          <v n="Operand">"ReadStatus"</v>
+                          <v n="Operand">"_ReadStatus"</v>
                           <v n="Type">"MC_ReadStatus"</v>
                           <v n="Comment">""</v>
                           <v n="SymbolComment">""</v>
@@ -645,7 +657,7 @@ END_VAR
                               <v n="Id">288L</v>
                             </o>
                             <o>
-                              <v n="Operand">"Error"</v>
+                              <v n="Operand">"_States._Error"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -661,7 +673,7 @@ END_VAR
                               <v n="Id">289L</v>
                             </o>
                             <o>
-                              <v n="Operand">"ErrorID"</v>
+                              <v n="Operand">"_States._ErrorID"</v>
                               <v n="Type">"UDINT"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -677,7 +689,7 @@ END_VAR
                               <v n="Id">290L</v>
                             </o>
                             <o>
-                              <v n="Operand">"ErrorStop"</v>
+                              <v n="Operand">"_States._ErrorStop"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -693,7 +705,7 @@ END_VAR
                               <v n="Id">291L</v>
                             </o>
                             <o>
-                              <v n="Operand">"Disabled"</v>
+                              <v n="Operand">"_States._Disabled"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -709,7 +721,7 @@ END_VAR
                               <v n="Id">292L</v>
                             </o>
                             <o>
-                              <v n="Operand">"Stopping"</v>
+                              <v n="Operand">"_States._Stopping"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -725,7 +737,7 @@ END_VAR
                               <v n="Id">293L</v>
                             </o>
                             <o>
-                              <v n="Operand">"StandStill"</v>
+                              <v n="Operand">"_States._StandStill"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -741,7 +753,7 @@ END_VAR
                               <v n="Id">294L</v>
                             </o>
                             <o>
-                              <v n="Operand">"DiscreteMotion"</v>
+                              <v n="Operand">"_States._DiscreteMotion"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -757,7 +769,7 @@ END_VAR
                               <v n="Id">295L</v>
                             </o>
                             <o>
-                              <v n="Operand">"ContinuousMotion"</v>
+                              <v n="Operand">"_States._ContinuousMotion"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -773,7 +785,7 @@ END_VAR
                               <v n="Id">296L</v>
                             </o>
                             <o>
-                              <v n="Operand">"SynchronizedMotion"</v>
+                              <v n="Operand">"_States._SynchronizedMotion"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -789,7 +801,7 @@ END_VAR
                               <v n="Id">297L</v>
                             </o>
                             <o>
-                              <v n="Operand">"Homing"</v>
+                              <v n="Operand">"_States._Homing"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -805,7 +817,7 @@ END_VAR
                               <v n="Id">298L</v>
                             </o>
                             <o>
-                              <v n="Operand">"ConstantVelocity"</v>
+                              <v n="Operand">"_States._ConstantVelocity"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -821,7 +833,7 @@ END_VAR
                               <v n="Id">299L</v>
                             </o>
                             <o>
-                              <v n="Operand">"Accelerating"</v>
+                              <v n="Operand">"_States._Accelerating"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -837,7 +849,7 @@ END_VAR
                               <v n="Id">300L</v>
                             </o>
                             <o>
-                              <v n="Operand">"Decelerating"</v>
+                              <v n="Operand">"_States._Decelerating"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -853,7 +865,7 @@ END_VAR
                               <v n="Id">301L</v>
                             </o>
                             <o>
-                              <v n="Operand">"Status"</v>
+                              <v n="Operand">"_States._Status"</v>
                               <v n="Type">"ST_AxisStatus"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -879,7 +891,7 @@ END_VAR
                         <l2 n="InputItems" cet="BoxTreeOperand">
                           <o>
                             <o n="Operand" t="Operand">
-                              <v n="Operand">"Axis"</v>
+                              <v n="Operand">"_Axis"</v>
                               <v n="Type">"AXIS_REF"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -989,7 +1001,7 @@ END_VAR
                       <o>
                         <v n="BoxType">"MC_MoveAbsolute"</v>
                         <o n="Instance" t="Operand">
-                          <v n="Operand">"MoveAbs1"</v>
+                          <v n="Operand">"_MoveAbs1"</v>
                           <v n="Type">"MC_MoveAbsolute"</v>
                           <v n="Comment">""</v>
                           <v n="SymbolComment">""</v>
@@ -1098,7 +1110,7 @@ END_VAR
                         <l2 n="InputItems" cet="BoxTreeOperand">
                           <o>
                             <o n="Operand" t="Operand">
-                              <v n="Operand">"Axis"</v>
+                              <v n="Operand">"_Axis"</v>
                               <v n="Type">"AXIS_REF"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -1335,7 +1347,7 @@ END_VAR
                       <o>
                         <v n="BoxType">"MC_MoveAbsolute"</v>
                         <o n="Instance" t="Operand">
-                          <v n="Operand">"MoveAbs2"</v>
+                          <v n="Operand">"_MoveAbs2"</v>
                           <v n="Type">"MC_MoveAbsolute"</v>
                           <v n="Comment">""</v>
                           <v n="SymbolComment">""</v>
@@ -1444,7 +1456,7 @@ END_VAR
                         <l2 n="InputItems" cet="BoxTreeOperand">
                           <o>
                             <o n="Operand" t="Operand">
-                              <v n="Operand">"Axis"</v>
+                              <v n="Operand">"_Axis"</v>
                               <v n="Type">"AXIS_REF"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -1681,7 +1693,7 @@ END_VAR
                       <o>
                         <v n="BoxType">"MC_MoveRelative"</v>
                         <o n="Instance" t="Operand">
-                          <v n="Operand">"MoveRel1"</v>
+                          <v n="Operand">"_MoveRel1"</v>
                           <v n="Type">"MC_MoveRelative"</v>
                           <v n="Comment">""</v>
                           <v n="SymbolComment">""</v>
@@ -1790,7 +1802,7 @@ END_VAR
                         <l2 n="InputItems" cet="BoxTreeOperand">
                           <o>
                             <o n="Operand" t="Operand">
-                              <v n="Operand">"Axis"</v>
+                              <v n="Operand">"_Axis"</v>
                               <v n="Type">"AXIS_REF"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -2027,7 +2039,7 @@ END_VAR
                       <o>
                         <v n="BoxType">"MC_MoveRelative"</v>
                         <o n="Instance" t="Operand">
-                          <v n="Operand">"MoveRel2"</v>
+                          <v n="Operand">"_MoveRel2"</v>
                           <v n="Type">"MC_MoveRelative"</v>
                           <v n="Comment">""</v>
                           <v n="SymbolComment">""</v>
@@ -2136,7 +2148,7 @@ END_VAR
                         <l2 n="InputItems" cet="BoxTreeOperand">
                           <o>
                             <o n="Operand" t="Operand">
-                              <v n="Operand">"Axis"</v>
+                              <v n="Operand">"_Axis"</v>
                               <v n="Type">"AXIS_REF"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -2373,7 +2385,7 @@ END_VAR
                       <o>
                         <v n="BoxType">"MC_MoveVelocity"</v>
                         <o n="Instance" t="Operand">
-                          <v n="Operand">"MoveVel1"</v>
+                          <v n="Operand">"_MoveVel1"</v>
                           <v n="Type">"MC_MoveVelocity"</v>
                           <v n="Comment">""</v>
                           <v n="SymbolComment">""</v>
@@ -2482,7 +2494,7 @@ END_VAR
                         <l2 n="InputItems" cet="BoxTreeOperand">
                           <o>
                             <o n="Operand" t="Operand">
-                              <v n="Operand">"Axis"</v>
+                              <v n="Operand">"_Axis"</v>
                               <v n="Type">"AXIS_REF"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -2719,7 +2731,7 @@ END_VAR
                       <o>
                         <v n="BoxType">"MC_MoveVelocity"</v>
                         <o n="Instance" t="Operand">
-                          <v n="Operand">"MoveVel2"</v>
+                          <v n="Operand">"_MoveVel2"</v>
                           <v n="Type">"MC_MoveVelocity"</v>
                           <v n="Comment">""</v>
                           <v n="SymbolComment">""</v>
@@ -2828,7 +2840,7 @@ END_VAR
                         <l2 n="InputItems" cet="BoxTreeOperand">
                           <o>
                             <o n="Operand" t="Operand">
-                              <v n="Operand">"Axis"</v>
+                              <v n="Operand">"_Axis"</v>
                               <v n="Type">"AXIS_REF"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -3065,7 +3077,7 @@ END_VAR
                       <o>
                         <v n="BoxType">"MC_Halt"</v>
                         <o n="Instance" t="Operand">
-                          <v n="Operand">"StopWeak"</v>
+                          <v n="Operand">"_StopWeak"</v>
                           <v n="Type">"MC_Halt"</v>
                           <v n="Comment">""</v>
                           <v n="SymbolComment">""</v>
@@ -3174,7 +3186,7 @@ END_VAR
                         <l2 n="InputItems" cet="BoxTreeOperand">
                           <o>
                             <o n="Operand" t="Operand">
-                              <v n="Operand">"Axis"</v>
+                              <v n="Operand">"_Axis"</v>
                               <v n="Type">"AXIS_REF"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -3348,7 +3360,7 @@ END_VAR
                       <o>
                         <v n="BoxType">"MC_Stop"</v>
                         <o n="Instance" t="Operand">
-                          <v n="Operand">"StopStrong"</v>
+                          <v n="Operand">"_StopStrong"</v>
                           <v n="Type">"MC_Stop"</v>
                           <v n="Comment">""</v>
                           <v n="SymbolComment">""</v>
@@ -3457,7 +3469,7 @@ END_VAR
                         <l2 n="InputItems" cet="BoxTreeOperand">
                           <o>
                             <o n="Operand" t="Operand">
-                              <v n="Operand">"Axis"</v>
+                              <v n="Operand">"_Axis"</v>
                               <v n="Type">"AXIS_REF"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -3606,12 +3618,217 @@ END_VAR
                     <v n="Title">""</v>
                     <v n="Label">""</v>
                     <v n="OutCommented">false</v>
+                    <l2 n="NetworkItems" cet="BoxTreeBox">
+                      <o>
+                        <v n="BoxType">"MC_WriteParameter"</v>
+                        <o n="Instance" t="Operand">
+                          <v n="Operand">"_WriteParameter"</v>
+                          <v n="Type">"MC_WriteParameter"</v>
+                          <v n="Comment">""</v>
+                          <v n="SymbolComment">""</v>
+                          <v n="Address">""</v>
+                          <o n="Flags" t="Flags">
+                            <v n="Flags">0</v>
+                            <v n="Fixed">false</v>
+                            <v n="Extensible">false</v>
+                          </o>
+                          <v n="LValue">false</v>
+                          <v n="Boolean">false</v>
+                          <v n="IsInstance">true</v>
+                          <v n="Id">325L</v>
+                        </o>
+                        <o n="OutputItems" t="OutputItemList">
+                          <l2 n="OutputItems" cet="Operand">
+                            <n />
+                            <o>
+                              <v n="Operand">""</v>
+                              <n n="Type" />
+                              <v n="Comment">""</v>
+                              <v n="SymbolComment">""</v>
+                              <v n="Address">""</v>
+                              <o n="Flags" t="Flags">
+                                <v n="Flags">0</v>
+                                <v n="Fixed">false</v>
+                                <v n="Extensible">false</v>
+                              </o>
+                              <v n="LValue">true</v>
+                              <v n="Boolean">false</v>
+                              <v n="IsInstance">false</v>
+                              <v n="Id">327L</v>
+                            </o>
+                            <o>
+                              <v n="Operand">""</v>
+                              <n n="Type" />
+                              <v n="Comment">""</v>
+                              <v n="SymbolComment">""</v>
+                              <v n="Address">""</v>
+                              <o n="Flags" t="Flags">
+                                <v n="Flags">0</v>
+                                <v n="Fixed">false</v>
+                                <v n="Extensible">false</v>
+                              </o>
+                              <v n="LValue">true</v>
+                              <v n="Boolean">false</v>
+                              <v n="IsInstance">false</v>
+                              <v n="Id">328L</v>
+                            </o>
+                            <o>
+                              <v n="Operand">""</v>
+                              <n n="Type" />
+                              <v n="Comment">""</v>
+                              <v n="SymbolComment">""</v>
+                              <v n="Address">""</v>
+                              <o n="Flags" t="Flags">
+                                <v n="Flags">0</v>
+                                <v n="Fixed">false</v>
+                                <v n="Extensible">false</v>
+                              </o>
+                              <v n="LValue">true</v>
+                              <v n="Boolean">false</v>
+                              <v n="IsInstance">false</v>
+                              <v n="Id">329L</v>
+                            </o>
+                          </l2>
+                        </o>
+                        <o n="Flags" t="Flags">
+                          <v n="Flags">0</v>
+                          <v n="Fixed">true</v>
+                          <v n="Extensible">false</v>
+                        </o>
+                        <n n="InputFlags" />
+                        <l2 n="InputItems" cet="BoxTreeOperand">
+                          <o>
+                            <o n="Operand" t="Operand">
+                              <v n="Operand">"_Axis"</v>
+                              <v n="Type">"AXIS_REF"</v>
+                              <v n="Comment">""</v>
+                              <v n="SymbolComment">""</v>
+                              <v n="Address">""</v>
+                              <o n="Flags" t="Flags">
+                                <v n="Flags">0</v>
+                                <v n="Fixed">false</v>
+                                <v n="Extensible">false</v>
+                              </o>
+                              <v n="LValue">false</v>
+                              <v n="Boolean">false</v>
+                              <v n="IsInstance">false</v>
+                              <v n="Id">322L</v>
+                            </o>
+                            <v n="Id">321L</v>
+                          </o>
+                          <o>
+                            <o n="Operand" t="Operand">
+                              <v n="Operand">""</v>
+                              <n n="Type" />
+                              <v n="Comment">""</v>
+                              <v n="SymbolComment">""</v>
+                              <v n="Address">""</v>
+                              <o n="Flags" t="Flags">
+                                <v n="Flags">0</v>
+                                <v n="Fixed">false</v>
+                                <v n="Extensible">false</v>
+                              </o>
+                              <v n="LValue">false</v>
+                              <v n="Boolean">false</v>
+                              <v n="IsInstance">false</v>
+                              <v n="Id">324L</v>
+                            </o>
+                            <v n="Id">323L</v>
+                          </o>
+                          <o>
+                            <o n="Operand" t="Operand">
+                              <v n="Operand">""</v>
+                              <n n="Type" />
+                              <v n="Comment">""</v>
+                              <v n="SymbolComment">""</v>
+                              <v n="Address">""</v>
+                              <o n="Flags" t="Flags">
+                                <v n="Flags">0</v>
+                                <v n="Fixed">false</v>
+                                <v n="Extensible">false</v>
+                              </o>
+                              <v n="LValue">false</v>
+                              <v n="Boolean">false</v>
+                              <v n="IsInstance">false</v>
+                              <v n="Id">331L</v>
+                            </o>
+                            <v n="Id">330L</v>
+                          </o>
+                          <o>
+                            <o n="Operand" t="Operand">
+                              <v n="Operand">""</v>
+                              <n n="Type" />
+                              <v n="Comment">""</v>
+                              <v n="SymbolComment">""</v>
+                              <v n="Address">""</v>
+                              <o n="Flags" t="Flags">
+                                <v n="Flags">0</v>
+                                <v n="Fixed">false</v>
+                                <v n="Extensible">false</v>
+                              </o>
+                              <v n="LValue">false</v>
+                              <v n="Boolean">false</v>
+                              <v n="IsInstance">false</v>
+                              <v n="Id">333L</v>
+                            </o>
+                            <v n="Id">332L</v>
+                          </o>
+                        </l2>
+                        <o n="InputParam" t="ParamList">
+                          <l2 n="Names" cet="String">
+                            <v>Axis</v>
+                            <v>Execute</v>
+                            <v>ParameterNumber</v>
+                            <v>Value</v>
+                          </l2>
+                          <l2 n="Types" cet="String">
+                            <v>AXIS_REF[REF]</v>
+                            <v>BOOL</v>
+                            <v>MC_AxisParameter</v>
+                            <v>LREAL</v>
+                          </l2>
+                        </o>
+                        <o n="OutputParam" t="ParamList">
+                          <l2 n="Names" cet="String">
+                            <v>Done</v>
+                            <v>Busy</v>
+                            <v>Error</v>
+                            <v>ErrorID</v>
+                          </l2>
+                          <l2 n="Types" cet="String">
+                            <v>BOOL</v>
+                            <v>BOOL</v>
+                            <v>BOOL</v>
+                            <v>UDINT</v>
+                          </l2>
+                        </o>
+                        <v n="CallType" t="Operator">FunctionBlock</v>
+                        <v n="EN">false</v>
+                        <v n="ENO">false</v>
+                        <n n="STSnippet" />
+                        <v n="ContainsExtensibleInputs">false</v>
+                        <v n="ProvidesSTSnippet">false</v>
+                        <v n="Id">326L</v>
+                      </o>
+                    </l2>
+                    <l2 n="Connectors" />
+                    <v n="Id">318L</v>
+                  </o>
+                  <o>
+                    <v n="ILActive">false</v>
+                    <v n="FBDValid">false</v>
+                    <v n="ILValid">false</v>
+                    <l2 n="ILLines" />
+                    <v n="Comment">""</v>
+                    <v n="Title">""</v>
+                    <v n="Label">""</v>
+                    <v n="OutCommented">false</v>
                     <l2 n="NetworkItems" cet="BoxTreeAssign">
                       <o>
                         <o n="OutputItems" t="OutputItemList">
                           <l2 n="OutputItems" cet="Operand">
                             <o>
-                              <v n="Operand">"BusyMoving"</v>
+                              <v n="Operand">"_BusyMoving"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -3665,7 +3882,7 @@ END_VAR
                           <l2 n="InputItems" cet="BoxTreeOperand">
                             <o>
                               <o n="Operand" t="Operand">
-                                <v n="Operand">"MoveAbs1.Busy"</v>
+                                <v n="Operand">"_MoveAbs1.Busy"</v>
                                 <v n="Type">"BOOL"</v>
                                 <v n="Comment">""</v>
                                 <v n="SymbolComment">""</v>
@@ -3684,7 +3901,7 @@ END_VAR
                             </o>
                             <o>
                               <o n="Operand" t="Operand">
-                                <v n="Operand">"MoveAbs2.Busy"</v>
+                                <v n="Operand">"_MoveAbs2.Busy"</v>
                                 <v n="Type">"BOOL"</v>
                                 <v n="Comment">""</v>
                                 <v n="SymbolComment">""</v>
@@ -3703,7 +3920,7 @@ END_VAR
                             </o>
                             <o>
                               <o n="Operand" t="Operand">
-                                <v n="Operand">"MoveRel1.Busy"</v>
+                                <v n="Operand">"_MoveRel1.Busy"</v>
                                 <v n="Type">"BOOL"</v>
                                 <v n="Comment">""</v>
                                 <v n="SymbolComment">""</v>
@@ -3722,7 +3939,7 @@ END_VAR
                             </o>
                             <o>
                               <o n="Operand" t="Operand">
-                                <v n="Operand">"MoveRel2.Busy"</v>
+                                <v n="Operand">"_MoveRel2.Busy"</v>
                                 <v n="Type">"BOOL"</v>
                                 <v n="Comment">""</v>
                                 <v n="SymbolComment">""</v>
@@ -3741,7 +3958,7 @@ END_VAR
                             </o>
                             <o>
                               <o n="Operand" t="Operand">
-                                <v n="Operand">"MoveVel1.Busy"</v>
+                                <v n="Operand">"_MoveVel1.Busy"</v>
                                 <v n="Type">"BOOL"</v>
                                 <v n="Comment">""</v>
                                 <v n="SymbolComment">""</v>
@@ -3760,7 +3977,7 @@ END_VAR
                             </o>
                             <o>
                               <o n="Operand" t="Operand">
-                                <v n="Operand">"MoveVel2.Busy"</v>
+                                <v n="Operand">"_MoveVel2.Busy"</v>
                                 <v n="Type">"BOOL"</v>
                                 <v n="Comment">""</v>
                                 <v n="SymbolComment">""</v>
@@ -3818,7 +4035,7 @@ END_VAR
                         <o n="OutputItems" t="OutputItemList">
                           <l2 n="OutputItems" cet="Operand">
                             <o>
-                              <v n="Operand">"BusyStopping"</v>
+                              <v n="Operand">"_BusyStopping"</v>
                               <v n="Type">"BOOL"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -3872,7 +4089,7 @@ END_VAR
                           <l2 n="InputItems" cet="BoxTreeOperand">
                             <o>
                               <o n="Operand" t="Operand">
-                                <v n="Operand">"StopStrong.Busy"</v>
+                                <v n="Operand">"_StopStrong.Busy"</v>
                                 <v n="Type">"BOOL"</v>
                                 <v n="Comment">""</v>
                                 <v n="SymbolComment">""</v>
@@ -3891,7 +4108,7 @@ END_VAR
                             </o>
                             <o>
                               <o n="Operand" t="Operand">
-                                <v n="Operand">"StopWeak.Busy"</v>
+                                <v n="Operand">"_StopWeak.Busy"</v>
                                 <v n="Type">"BOOL"</v>
                                 <v n="Comment">""</v>
                                 <v n="SymbolComment">""</v>
@@ -3967,7 +4184,7 @@ END_VAR
                           <l2 n="OutputItems" cet="Operand">
                             <n />
                             <o>
-                              <v n="Operand">"ErrorIDPrevious"</v>
+                              <v n="Operand">"_ErrorIDPrevious"</v>
                               <v n="Type">"UDINT"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -4023,7 +4240,7 @@ END_VAR
                             <l2 n="InputItems" cet="BoxTreeOperand">
                               <o>
                                 <o n="Operand" t="Operand">
-                                  <v n="Operand">"ErrorID"</v>
+                                  <v n="Operand">"_States._ErrorID"</v>
                                   <v n="Type">"UDINT"</v>
                                   <v n="Comment">""</v>
                                   <v n="SymbolComment">""</v>
@@ -4082,7 +4299,7 @@ END_VAR
                           </o>
                           <o t="BoxTreeOperand">
                             <o n="Operand" t="Operand">
-                              <v n="Operand">"ErrorID"</v>
+                              <v n="Operand">"_States._ErrorID"</v>
                               <v n="Type">"UDINT"</v>
                               <v n="Comment">""</v>
                               <v n="SymbolComment">""</v>
@@ -4216,7 +4433,7 @@ END_VAR
         </NWL>
       </Implementation>
     </Method>
-    <Method Name="Halt" Id="{12ca4ce0-9928-46fe-8da6-258c70e9b8b4}" FolderPath="Movements\Brake\">
+    <Method Name="Halt" Id="{12ca4ce0-9928-46fe-8da6-258c70e9b8b4}" FolderPath="Methods\Movements\Brake\">
       <Declaration><![CDATA[METHOD Halt : BOOL
 VAR_INPUT
 END_VAR]]></Declaration>
@@ -4224,21 +4441,21 @@ END_VAR]]></Declaration>
         <ST><![CDATA[
 // Halts the axis, NOT locking the axis from further commands during its process
 
-StopWeak(Axis := Axis);
+_StopWeak(Axis := _Axis);
 
-StopWeak.Execute			:= TRUE;
+_StopWeak.Execute			:= TRUE;
 
-IF StopWeak.Done THEN
-	StopWeak.Execute := FALSE;
+IF _StopWeak.Done THEN
+	_StopWeak.Execute := FALSE;
 	Halt := TRUE;
 END_IF
 
-IF StopWeak.Error THEN
-	StopWeak.Execute := FALSE;
+IF _StopWeak.Error THEN
+	_StopWeak.Execute := FALSE;
 END_IF]]></ST>
       </Implementation>
     </Method>
-    <Method Name="MoveAtVelocity" Id="{031bd219-54b3-423c-a59d-8808208dd282}" FolderPath="Movements\Velocity\">
+    <Method Name="MoveAtVelocity" Id="{031bd219-54b3-423c-a59d-8808208dd282}" FolderPath="Methods\Movements\Velocity\">
       <Declaration><![CDATA[METHOD MoveAtVelocity : BOOL
 VAR_INPUT
 	Velocity		: LREAL;
@@ -4249,23 +4466,23 @@ END_VAR
         <ST><![CDATA[
 // Move at a given speed in a defined direction until a stop command is activated
 
-MoveVel1(Axis := Axis);
+_MoveVel1(Axis := _Axis);
 
-MoveVel1.Velocity 			:= Velocity;
-MoveVel1.Direction			:= Direction;
-MoveVel1.Execute			:= TRUE;
+_MoveVel1.Velocity 			:= Velocity;
+_MoveVel1.Direction			:= Direction;
+_MoveVel1.Execute			:= TRUE;
 
-IF BusyMoving THEN
-	MoveVel1.Execute := FALSE;
+IF _BusyMoving THEN
+	_MoveVel1.Execute := FALSE;
 	MoveAtVelocity := TRUE;
 END_IF
 
-IF MoveVel1.Error THEN
-	MoveVel1.Execute := FALSE;
+IF _MoveVel1.Error THEN
+	_MoveVel1.Execute := FALSE;
 END_IF]]></ST>
       </Implementation>
     </Method>
-    <Method Name="MoveToPosition" Id="{6f3dc5db-e33f-4ac2-89b3-444ea6b1636a}" FolderPath="Movements\Position\">
+    <Method Name="MoveToPosition" Id="{6f3dc5db-e33f-4ac2-89b3-444ea6b1636a}" FolderPath="Methods\Movements\Position\">
       <Declaration><![CDATA[METHOD MoveToPosition : BOOL
 VAR_INPUT
 	Position		: LREAL;
@@ -4276,23 +4493,23 @@ END_VAR
         <ST><![CDATA[
 // Move to a specific location at a given speed
 
-MoveAbs1(Axis := Axis);
+_MoveAbs1(Axis := _Axis);
 
-MoveAbs1.Position			:= Position;
-MoveAbs1.Velocity 			:= Velocity;
-MoveAbs1.Execute			:= TRUE;
+_MoveAbs1.Position			:= Position;
+_MoveAbs1.Velocity 			:= Velocity;
+_MoveAbs1.Execute			:= TRUE;
 
-IF MoveAbs1.Done THEN
-	MoveAbs1.Execute := FALSE;
+IF _MoveAbs1.Done THEN
+	_MoveAbs1.Execute := FALSE;
 	MoveToPosition := TRUE;
 END_IF
 
-IF MoveAbs1.Error THEN
-	MoveAbs1.Execute := FALSE;
+IF _MoveAbs1.Error THEN
+	_MoveAbs1.Execute := FALSE;
 END_IF]]></ST>
       </Implementation>
     </Method>
-    <Method Name="PowerOff" Id="{931cb592-80ae-4fd4-9bc7-23c7456ec9bf}" FolderPath="Power and Monitoring\">
+    <Method Name="PowerOff" Id="{931cb592-80ae-4fd4-9bc7-23c7456ec9bf}" FolderPath="Methods\Power and Monitoring\">
       <Declaration><![CDATA[METHOD PowerOff : BOOL
 VAR_INPUT
 END_VAR
@@ -4301,19 +4518,19 @@ END_VAR
         <ST><![CDATA[
 // Disable the axis
 
-Enable(Axis := Axis);
+_Enable(Axis := _Axis);
 
-Enable.Enable 				:= FALSE;
-Enable.Enable_Negative 		:= FALSE;
-Enable.Enable_Positive 		:= FALSE;
-Enable.Override 			:= 0;
+_Enable.Enable 				:= FALSE;
+_Enable.Enable_Negative 		:= FALSE;
+_Enable.Enable_Positive 		:= FALSE;
+_Enable.Override 			:= 0;
 
-IF NOT Enable.Status THEN
+IF NOT _Enable.Status THEN
 	PowerOff := TRUE;
 END_IF]]></ST>
       </Implementation>
     </Method>
-    <Method Name="PowerOn" Id="{055fc17f-11ee-4864-95b6-aec8c64cb3a6}" FolderPath="Power and Monitoring\">
+    <Method Name="PowerOn" Id="{055fc17f-11ee-4864-95b6-aec8c64cb3a6}" FolderPath="Methods\Power and Monitoring\">
       <Declaration><![CDATA[METHOD PowerOn : BOOL
 VAR_INPUT
 END_VAR
@@ -4322,19 +4539,19 @@ END_VAR
         <ST><![CDATA[
 // Enable the axis
 
-Enable(Axis := Axis);
+_Enable(Axis := _Axis);
 
-Enable.Enable 				:= TRUE;
-Enable.Enable_Negative 		:= TRUE;
-Enable.Enable_Positive 		:= TRUE;
-Enable.Override 			:= 100;
+_Enable.Enable 				:= TRUE;
+_Enable.Enable_Negative 		:= TRUE;
+_Enable.Enable_Positive 		:= TRUE;
+_Enable.Override 			:= 100;
 
-IF Enable.Status THEN
+IF _Enable.Status THEN
 	PowerOn := TRUE;
 END_IF]]></ST>
       </Implementation>
     </Method>
-    <Method Name="Reset" Id="{42cec210-5b3f-4f2e-9099-2c39c8e00b0b}" FolderPath="Power and Monitoring\">
+    <Method Name="Reset" Id="{42cec210-5b3f-4f2e-9099-2c39c8e00b0b}" FolderPath="Methods\Power and Monitoring\">
       <Declaration><![CDATA[METHOD Reset : BOOL
 VAR_INPUT
 END_VAR
@@ -4343,18 +4560,18 @@ END_VAR
         <ST><![CDATA[
 // Reset errors on the NC axis
 
-Restart(Axis := Axis);
+_Reset(Axis := _Axis);
 
-Restart.Execute 			:= TRUE;
+_Reset.Execute 			:= TRUE;
 
-IF Restart.Done THEN
-	Restart.Execute := FALSE;
+IF _Reset.Done THEN
+	_Reset.Execute := FALSE;
 	Reset := TRUE;
 END_IF
 	]]></ST>
       </Implementation>
     </Method>
-    <Method Name="ReversingSequence" Id="{cfe6002d-006b-4fb1-82ee-b56b6ae14ab9}" FolderPath="Movements\Position\">
+    <Method Name="ReversingSequence" Id="{cfe6002d-006b-4fb1-82ee-b56b6ae14ab9}" FolderPath="Methods\Movements\Position\">
       <Declaration><![CDATA[METHOD ReversingSequence : BOOL
 VAR_INPUT
 	Position1				: LREAL;
@@ -4367,59 +4584,59 @@ END_VAR
         <ST><![CDATA[
 // Move to Position1, then to Position2, at a set speed with a delay between the movements
 
-MoveAbs1(Axis := Axis);
-MoveAbs2(Axis := Axis);
-DelayTimer(PT := DelayBetweenMoves);
+_MoveAbs1(Axis := _Axis);
+_MoveAbs2(Axis := _Axis);
+_DelayTimer(PT := DelayBetweenMoves);
 
-MoveAbs1.Position			:= Position1;
-MoveAbs1.Velocity 			:= Velocity;
+_MoveAbs1.Position			:= Position1;
+_MoveAbs1.Velocity 			:= Velocity;
 
-MoveAbs2.Position			:= Position2;
-MoveAbs2.Velocity 			:= Velocity;
+_MoveAbs2.Position			:= Position2;
+_MoveAbs2.Velocity 			:= Velocity;
 
-CASE LocalState OF
+CASE _LocalState OF
 	
 	0:
-		MoveAbs1.Execute := TRUE;
-		IF MoveAbs1.Done THEN
-			MoveAbs1.Execute := FALSE;
-			LocalState := 1;			
+		_MoveAbs1.Execute := TRUE;
+		IF _MoveAbs1.Done THEN
+			_MoveAbs1.Execute := FALSE;
+			_LocalState := 1;			
 		END_IF
 		
 	1:
-		DelayTimer.IN := TRUE;
-		IF DelayTimer.Q THEN
-			DelayTimer.IN := FALSE;
-			LocalState := 2;
+		_DelayTimer.IN := TRUE;
+		IF _DelayTimer.Q THEN
+			_DelayTimer.IN := FALSE;
+			_LocalState := 2;
 		END_IF
 		
 	2:
-		MoveAbs2.Execute := TRUE;
-		IF MoveAbs2.Done THEN
-			MoveAbs2.Execute := FALSE;
-			LocalState := 3;			
+		_MoveAbs2.Execute := TRUE;
+		IF _MoveAbs2.Done THEN
+			_MoveAbs2.Execute := FALSE;
+			_LocalState := 3;			
 		END_IF
 		
 	3:
-		DelayTimer.IN := TRUE;
-		IF DelayTimer.Q THEN
-			DelayTimer.IN := FALSE;
-			LocalState := 4;
+		_DelayTimer.IN := TRUE;
+		IF _DelayTimer.Q THEN
+			_DelayTimer.IN := FALSE;
+			_LocalState := 4;
 		END_IF
 		
 	4:
-		LocalState := 0;
+		_LocalState := 0;
 		ReversingSequence := TRUE;
 
 END_CASE
 
-IF MoveAbs1.Error OR MoveAbs2.Error THEN
-	MoveAbs1.Execute := FALSE;
-	MoveAbs2.Execute := FALSE;
+IF _MoveAbs1.Error OR _MoveAbs2.Error THEN
+	_MoveAbs1.Execute := FALSE;
+	_MoveAbs2.Execute := FALSE;
 END_IF]]></ST>
       </Implementation>
     </Method>
-    <Method Name="Stop" Id="{e8f89590-5010-45fb-a6e8-5b340988abbd}" FolderPath="Movements\Brake\">
+    <Method Name="Stop" Id="{e8f89590-5010-45fb-a6e8-5b340988abbd}" FolderPath="Methods\Movements\Brake\">
       <Declaration><![CDATA[METHOD Stop : BOOL
 VAR_INPUT
 END_VAR
@@ -4428,17 +4645,42 @@ END_VAR
         <ST><![CDATA[
 // Halts the axis, locking the axis from further commands during its process
 
-StopStrong(Axis := Axis);
+_StopStrong(Axis := _Axis);
 
-StopStrong.Execute			:= TRUE;
+_StopStrong.Execute			:= TRUE;
 
-IF StopStrong.Done THEN
-	StopStrong.Execute := FALSE;
+IF _StopStrong.Done THEN
+	_StopStrong.Execute := FALSE;
 	Stop := TRUE;
 END_IF
 
-IF StopStrong.Error THEN
-	StopStrong.Execute := FALSE;
+IF _StopStrong.Error THEN
+	_StopStrong.Execute := FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="WriteToParameter" Id="{9cfda403-6e05-479b-94e2-36ef4e728d76}" FolderPath="Methods\Power and Monitoring\">
+      <Declaration><![CDATA[METHOD WriteToParameter : BOOL
+VAR_INPUT
+	Parameter		: MC_AxisParameter;
+	Value			: LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_WriteParameter(Axis := _Axis);
+
+
+_WriteParameter.ParameterNumber := Parameter;
+_WriteParameter.Value := Value;
+_WriteParameter.Execute := TRUE;
+
+
+IF _WriteParameter.Done THEN
+	WriteToParameter := TRUE;
+	_WriteParameter.Execute := FALSE;
+ELSIF _WriteParameter.Error THEN
+	WriteToParameter := FALSE;
+	_WriteParameter.Execute := FALSE;
 END_IF]]></ST>
       </Implementation>
     </Method>
@@ -4454,6 +4696,12 @@ END_IF]]></ST>
       <LineId Id="89" Count="2" />
       <LineId Id="88" Count="0" />
       <LineId Id="87" Count="0" />
+    </LineIds>
+    <LineIds Name="AxisControl.AxisStates.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxisControl.AxisStates.Set">
+      <LineId Id="2" Count="0" />
     </LineIds>
     <LineIds Name="AxisControl.CheckForErrors">
       <LineId Id="37" Count="0" />
@@ -4574,6 +4822,22 @@ END_IF]]></ST>
       <LineId Id="17" Count="0" />
       <LineId Id="16" Count="0" />
       <LineId Id="18" Count="1" />
+    </LineIds>
+    <LineIds Name="AxisControl.WriteToParameter">
+      <LineId Id="5" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="13" Count="1" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="12" Count="0" />
     </LineIds>
   </POU>
 </TcPlcObject>
