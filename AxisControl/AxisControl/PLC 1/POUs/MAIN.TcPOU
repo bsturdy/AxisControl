@@ -4,11 +4,9 @@
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
 
-	Axis		: AxisControl;
+	Control		: AxisControl;	
 	State		: BYTE;
-	
-	Test		: AxisStates;
-	
+	Positions	: ARRAY [1..3] OF LREAL;
 
 END_VAR
 ]]></Declaration>
@@ -16,43 +14,44 @@ END_VAR
       <ST><![CDATA[
 // Implement AxisControl
 
-Axis.CyclicUpdate();
+Control.CyclicUpdate();
 
-Axis.AutoErrorCheckAndReset();
-
-Test := Axis.AxisStates;
+Control.AutoErrorCheckAndReset(AxisID := 2);
 
 CASE State OF
 	
 	0:
+		State := 1;
 	
-		IF Axis.PowerOn() THEN
-			State := 1;
-		END_IF
-		
 	1:
-		IF Axis.WriteToParameter(Parameter := MC_AxisParameter.EnableLimitNeg, Value := 1) THEN
-			State := 22;
-		ELSE
-			State := 55;
+		IF Control.PowerOn(AxisID := 2, Override := 100) THEN
+			State := 2;
 		END_IF
-END_CASE]]></ST>
+	
+	2:
+		Control.MoveAtVelocity(AxisID := 2, Velocity := 90, Direction := MC_Positive_Direction);
+		
+
+END_CASE
+
+Positions := Control.CurrentPositionModulo;]]></ST>
     </Implementation>
     <LineIds Name="MAIN">
       <LineId Id="41" Count="2" />
       <LineId Id="13" Count="0" />
-      <LineId Id="70" Count="0" />
-      <LineId Id="69" Count="0" />
-      <LineId Id="74" Count="0" />
-      <LineId Id="73" Count="0" />
-      <LineId Id="53" Count="0" />
-      <LineId Id="50" Count="0" />
-      <LineId Id="54" Count="0" />
-      <LineId Id="56" Count="0" />
-      <LineId Id="58" Count="7" />
-      <LineId Id="67" Count="1" />
-      <LineId Id="66" Count="0" />
-      <LineId Id="55" Count="0" />
+      <LineId Id="174" Count="0" />
+      <LineId Id="173" Count="0" />
+      <LineId Id="134" Count="2" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="140" Count="2" />
+      <LineId Id="169" Count="1" />
+      <LineId Id="152" Count="2" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="178" Count="0" />
     </LineIds>
   </POU>
 </TcPlcObject>

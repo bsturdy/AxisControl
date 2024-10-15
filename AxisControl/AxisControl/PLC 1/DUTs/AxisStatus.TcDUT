@@ -1,8 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
-  <DUT Name="AxisStates" Id="{c7d4df51-2260-426e-9abc-1d4e511802c8}">
-    <Declaration><![CDATA[TYPE AxisStates :
+  <DUT Name="AxisStatus" Id="{c7d4df51-2260-426e-9abc-1d4e511802c8}">
+    <Declaration><![CDATA[TYPE AxisStatus :
 STRUCT
+	
 	_Error				: BOOL;
 	_ErrorID			: UDINT;
 	_ErrorStop			: BOOL;
@@ -17,6 +18,7 @@ STRUCT
 	_Accelerating		: BOOL;
 	_Decelerating		: BOOL;
 	_Status				: ST_AxisStatus;
+	
 END_STRUCT
 END_TYPE
 ]]></Declaration>

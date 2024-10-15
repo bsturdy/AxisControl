@@ -18,10 +18,13 @@
     <LibraryReferences>{e4cfe6ca-7608-47d8-b8c9-8f7d9ed93618}</LibraryReferences>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="DUTs\AxisStates.TcDUT">
+    <Compile Include="DUTs\AxisStatus.TcDUT">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="PlcTask.TcTTO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="PlcTask1.TcTTO">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\AxisControl.TcPOU">
